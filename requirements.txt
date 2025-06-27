@@ -1,0 +1,51 @@
+import requests
+import pandas as pd
+
+# URL 2: Focada em resultados.
+url = "https://graph.facebook.com/v19.0/act_439991594112145/insights?access_token=EAGge1iO10QgBO2kV2C9ZCOPvjF1BUkZAd22dxTJMgwvXCJSNsf0pGP7maW4gznObxU51pjnpB4sSq4AgAxULs8YTJKdNzwJMWDhxQoOzVBdsOEzZCXUgkmjpICZARZCLEB53ZB9DnjKYI8kMhLk72w0MZCI2F8Vw6GPlO3Aklb18G5hbZAGv4TZCGUwZBfeLPWLuP42AZDZD&level=ad&fields=results,cost_per_result,actions&date_preset=last_90d&time_increment=1"
+
+all_data = []
+page_count = 1
+
+# A API do Meta retorna dados em "páginas". Este loop while garante que peguemos os dados de todas as páginas.
+while url:
+    try:
+        print(f"Buscando dados da página {page_count}...")
+        response = requests.get(url)
+        response.raise_for_status()  # Lança um erro para respostas com status 4xx ou 5xx.
+        
+        json_data = response.json()
+        
+        # Adiciona os dados da página atual à nossa lista
+        if 'data' in json_data and json_data['data']:
+            all_data.extend(json_data['data'])
+        
+        # Verifica se existe uma próxima página de dados
+        if 'paging' in json_data and 'next' in json_data['paging']:
+            url = json_data['paging']['next']
+            page_count += 1
+        else:
+            url = None # Encerra o loop se não houver próxima página
+            
+    except requests.exceptions.RequestException as e:
+        print(f"Erro ao fazer a requisição: {e}")
+        # Se houver um erro, podemos querer parar e retornar os dados que já coletamos
+        url = None
+
+print("Busca de dados finalizada.")
+
+# Verifica se algum dado foi coletado antes de criar o DataFrame
+if all_data:
+    # Converte a lista de dados em um DataFrame do pandas
+    # A função json_normalize é ótima para "achatar" dados JSON aninhados
+    df_results = pd.json_normalize(all_data, 
+                                   record_path=['actions'], 
+                                   meta=['date_start', 'date_stop', 'results', 'cost_per_result'])
+    
+    # O Power BI usará a última variável do tipo DataFrame definida no script.
+    print("DataFrame de Resultados criado com sucesso.")
+    print(df_results.head()) # Mostra as 5 primeiras linhas para verificação
+else:
+    print("Nenhum dado foi retornado pela API.")
+    # Cria um DataFrame vazio com as colunas esperadas se nada for retornado
+    df_results = pd.DataFrame(columns=['action_type', 'value', 'date_start', 'date_stop', 'results', 'cost_per_result'])
